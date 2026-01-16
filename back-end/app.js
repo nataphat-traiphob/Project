@@ -23,13 +23,14 @@ app.use("/public" , express.static(path.join(__dirname , "public")));
 // Import Routes
 
 import authRoutes from './routes/auth.routes.js'
-
-
+import usersRoutes from './routes/users.rotes.js'
+import meRoutes from './routes/me.routes.js'
 
 // Use Routes
 
 app.use("/api/auth" , authRoutes)
-
+app.use("/api/users" , usersRoutes)
+app.use("/api/me" , meRoutes)
 
 app.use((req , res , next) => {
     res.status(404).json({success : false , message:"Page not found"})

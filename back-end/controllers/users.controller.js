@@ -143,14 +143,7 @@ export const createUser = async (req, res, next) => {
       address,
       tel,
       role = "user",
-    } = req.body || {};
-
-    if (!fname || !lname || !email || !password_input || !address || !tel) {
-      return res.status(400).json({
-        success: false,
-        message: "The required information is incomplete",
-      });
-    }
+    } = req.validated;
 
     const avaliable = await db("users").where({ email }).first();
 
@@ -185,26 +178,36 @@ export const createUser = async (req, res, next) => {
  * - แก้ไขข้อมูล user จาก id
  */
 
-export const editUser = async (req, res, next) => {
+export const updateUser = async (req, res, next) => {
   try {
     const id = req.params.id;
+    const currentUser = req.user;
+    const updateData = req.validated;
 
     if (!id)
       return res
         .status(400)
         .json({ success: false, message: "User ID is required" });
 
-    const { fname, lname, address, tel, role = "user" } = req.body || {};
+    if (
+      currentUser.role === "admin" &&
+      currentUser.id === Number(id) &&
+      updateData.role !== undefined
+    ) {
+      return res
+        .status(403)
+        .json({ success: false, message: "Admin cannot change own role" });
+    }
 
-    const updateData = {};
+    if (!Object.keys(updateData).length) {
+      return res
+        .status(400)
+        .json({ success: false, message: "No data to update" });
+    }
 
-    if (fname !== undefined) updateData.fname = fname;
-    if (lname !== undefined) updateData.lname = lname;
-    if (address !== undefined) updateData.address = address;
-    if (tel !== undefined) updateData.tel = tel;
-    if (role !== undefined) updateData.role = role;
-
-    const updated = await db("users").where({ user_id: id }).update(updateData);
+    const updated = await db("users")
+      .where({ user_id: id, is_active: true })
+      .update(updateData);
 
     if (!updated) {
       return res
@@ -221,23 +224,44 @@ export const editUser = async (req, res, next) => {
 };
 
 /**
+ * DELETE /api/users/:id
  *
+ * - ลบข้อมูล user จาก id
  */
 
 export const deleteUser = async (req, res, next) => {
   try {
-    const id = req.params;
+    const id = req.params.id;
+    const currentUser = req.user;
     if (!id)
       return res
         .status(400)
         .json({ success: false, message: "User ID is required" });
 
+    if (currentUser.role === "admin" && currentUser.id === Number(id)) {
+      return res.json({
+        success: false,
+        message: "Admin cannot delete own account",
+      });
+    }
+
     const deleted = await db("users")
       .where({ user_id: id })
-      .update({ is_active: false });
+      .update({
+        is_active: false,
+        email: `deleted_${id}_${Date.now()}@example.com`,
+        fname: "deleted",
+        lname: "user",
+        tel: "-",
+        address: "-",
+        password: hashedPassword,
+        role: "user",
+      });
 
     if (!deleted) {
-      res.status(404).json({ success: false, message: "User not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "User not found" });
     }
 
     res.json({

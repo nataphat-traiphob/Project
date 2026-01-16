@@ -1,7 +1,7 @@
 import jwt from 'jsonwebtoken'
 
 const auth = (...roles) => {
-    return (req,res,next) => {
+    return async (req,res,next) => {
         try {
 
             // ดู method / path ที่ส่งเข้า
@@ -19,6 +19,16 @@ const auth = (...roles) => {
 
             const payload = jwt.verify(token , process.env.JWT_SECRET);
             console.log('[AUTH] verified payload:' , payload);
+
+            const user = await db('users').select('user_id' , 'role' , 'is_active' , 'token_version').where({user_id : payload.id}).first();
+
+            if(!user || !user.is_active){
+                return res.status(401).json({success : false , message : 'Account deactivated'})
+            }
+
+            if(payload.token_version !== user.token_version){
+                return res.status(401).json({success : false , message : 'Token revoked'})
+            }
 
             if(roles.length && !roles.includes(payload.role)){
                 console.log('[AUTH] -> 403 Forbidden (role not allowed)' , roles , 'got:', payload.role);

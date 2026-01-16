@@ -2,14 +2,15 @@ import db from "../db/knex.js";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcrypt";
 
-export const login = async (req, res, next) => {
+/**
+ * POST /api/auth/login
+ * 
+ * เข้าสู่ระบบ
+ */
+
+export const Login = async (req, res, next) => {
   try {
-    const { email, password } = req.body || {};
-    if (!email || !password){
-      return res
-        .status(400)
-        .json({ success: false, message: "email and password required" });
-    }
+    const { email, password } = req.validated;
 
     const user = await db("users")
       .select("user_id", "email", "role", "password")
@@ -28,7 +29,7 @@ export const login = async (req, res, next) => {
     delete user.password
 
     const token = jwt.sign(
-        {id:user.user_id , role:user.role},
+        {id:user.user_id , role:user.role , token_version : user.token_version},
         process.env.JWT_SECRET,
         {expiresIn: process.env.JWT_EXPIRES || "2h"}
     )
@@ -42,3 +43,46 @@ export const login = async (req, res, next) => {
   }
 };
 
+/**
+ * POST /api/auth/register
+ * 
+ * - เพิ่มข้อมูลผู้ใช้ผ่านการลงทะเบียน
+ */
+
+export const Register = async (req, res, next) => {
+  try {
+    const {
+      fname,
+      lname,
+      email,
+      password_input,
+      address,
+      tel,
+    } = req.validated;
+
+    const avaliable = await db("users").where({ email }).first();
+
+    if (avaliable) {
+      return res
+        .status(409)
+        .json({ success: false, message: "Email already exists" });
+    }
+
+    const password = await bcrypt.hash(password_input, 10);
+
+    await db("users").insert({
+      fname,
+      lname,
+      email,
+      password,
+      address,
+      tel,
+      
+    });
+    res
+      .status(201)
+      .json({ success: true, message: "User information added successfully" });
+  } catch (e) {
+    next(e);
+  }
+};
