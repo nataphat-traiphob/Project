@@ -17,7 +17,7 @@ app.use(express.urlencoded({extended : true}))
 app.use(express.json());
 app.use(morgan('dev'));
 
-app.use("/uploads" , express.static(path.join(__dirname , "uploads")));
+app.use("/uploads/products" , express.static(path.join(__dirname , "uploads/products/active")));
 app.use("/public" , express.static(path.join(__dirname , "public")));
 
 // Import Routes
