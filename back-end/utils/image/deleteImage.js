@@ -1,6 +1,6 @@
 import fs from 'fs'
 import path from 'path'
-import { IMAGE_FOLDERS } from './imageFolder';
+import { IMAGE_FOLDERS } from './imageFolder.js';
 
 /**
   * deleteImage(type , state , filename)
