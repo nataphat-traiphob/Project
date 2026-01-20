@@ -1,5 +1,5 @@
 import fs from 'fs/promises'
-import { IMAGE_FOLDERS } from './imageFolder'
+import { IMAGE_FOLDERS } from './imageFolder.js'
 import path from 'path'
 
 /**

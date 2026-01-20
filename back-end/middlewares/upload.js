@@ -1,9 +1,11 @@
 import multer from 'multer'
 import path from 'path'
+import { IMAGE_FOLDERS } from '../utils/image/imageFolder.js'
+
 
 const storage = multer.diskStorage({
     destination : (req , file , cb) => {
-        cb(null , "uploads/products/active")
+        cb(null , IMAGE_FOLDERS.product.active)
     },
     filename : (req , file , cb) => {
         const ext = path.extname(file.originalname);

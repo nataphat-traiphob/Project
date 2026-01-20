@@ -4,9 +4,9 @@ import { buildImagePath } from "../utils/image/buildImagePath.js";
 import { deleteImage } from "../utils/image/deleteImage.js";
 
 /**
- * GET /api/product
+ * GET /api/announcement
  * 
- * ดึงข้อมูล Product ทั้งหมด
+ * ดึงข้อมูล announcement ทั้งหมด
  */
 
 export const getProducts = async (req, res, next) => {
@@ -98,9 +98,9 @@ export const getProducts = async (req, res, next) => {
 };
 
 /**
- * GET /api/product/:id
+ * GET /api/announcement/:id
  *
- * - ดึงข้อมูล product ตัวเดียวจาก id
+ * - ดึงข้อมูล announcement ตัวเดียวจาก id
  */
 
 export const getProductById = async (req, res, next) => {
@@ -141,9 +141,9 @@ export const getProductById = async (req, res, next) => {
 };
 
 /**
- * POST /api/product
+ * POST /api/announcement
  *
- * - เพิ่มข้อมูล product
+ * - เพิ่มข้อมูล announcement
  */
 
 export const createProduct = async (req, res, next) => {
@@ -183,9 +183,9 @@ export const createProduct = async (req, res, next) => {
 };
 
 /**
- * PUT /api/product/:id
+ * PUT /api/announcement/:id
  *
- * - แก้ไขข้อมูล product จาก id
+ * - แก้ไขข้อมูล announcement จาก id
  */
 
 export const updateProduct = async (req, res, next) => {
@@ -235,11 +235,11 @@ export const updateProduct = async (req, res, next) => {
     if (!updated) {
       return res
         .status(404)
-        .json({ success: false, message: "Product not found" });
+        .json({ success: false, message: "Announcement not found" });
     }
     res.json({
       success: true,
-      message: "Product information updated successfully",
+      message: "Announcement information updated successfully",
     });
   } catch (e) {
     next(e);
@@ -247,9 +247,9 @@ export const updateProduct = async (req, res, next) => {
 };
 
 /**
- * DELETE /api/product/:id
+ * DELETE /api/announcement/:id
  *
- * - ลบข้อมูล product จาก id
+ * - ลบข้อมูล announcement จาก id
  */
 
 export const deleteProduct = async (req, res, next) => {
@@ -258,7 +258,7 @@ export const deleteProduct = async (req, res, next) => {
     if (!id)
       return res
         .status(400)
-        .json({ success: false, message: "Product ID is required" });
+        .json({ success: false, message: "Announcement ID is required" });
 
     const deleted = await db("product")
       .where({ pd_id: id })
@@ -267,7 +267,7 @@ export const deleteProduct = async (req, res, next) => {
     if (!deleted) {
       return res
         .status(404)
-        .json({ success: false, message: "Product not found" });
+        .json({ success: false, message: "Announcement not found" });
     }
 
     const oldProduct = await db('product').select("pd_img").where({pd_id : id , is_active : true}).first()
@@ -276,7 +276,7 @@ export const deleteProduct = async (req, res, next) => {
 
     res.json({
       success: true,
-      message: "Product information deleted successfully",
+      message: "Announcement information deleted successfully",
     });
   } catch (e) {
     next(e);

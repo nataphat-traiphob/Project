@@ -1,5 +1,12 @@
 import jwt from 'jsonwebtoken'
 
+/**
+ * Middlewares ในการจำกัดสิทธิ์เข้าถึง
+ * 
+ * @param  {('admin'|'user')} roles = บทบาทที่อนุญาตให้เข้าเรียกใช้งาน api
+ * 
+ */
+
 const auth = (...roles) => {
     return async (req,res,next) => {
         try {

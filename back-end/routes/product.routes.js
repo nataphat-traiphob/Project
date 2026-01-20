@@ -3,7 +3,7 @@ import auth from "../middlewares/auth.js";
 import { requireImage } from "../middlewares/requireImage.js";
 import { validate } from "../middlewares/validate.js";
 
-import * as upload from '../middlewares/upload.js'
+import {uploadProductImage} from '../middlewares/upload.js'
 import * as validators from '../validators/product.schema.js'
 import * as product from '../controllers/product.controller.js'
 
@@ -12,6 +12,17 @@ router.use(auth('admin'))
 
 router.get('/' , product.getProducts);
 router.get('/:id' , product.getProductById);
-router.post('/' , upload.single("pd_img") , validate(validators.createProductSchema) , requireImage , product.createProduct)
-router.put('/:id' , upload.single("pd_img") , validate(validators.updateProductSchema) , product.updateProduct)
+// router.post('/' , uploadProductImage.single("pd_img") , requireImage , validate(validators.createProductSchema)  , product.createProduct)
+router.post(
+  '/',
+  uploadProductImage.single('pd_img'),
+  (req, res) => {
+    console.log('file:', req.file)
+    console.log('body:', req.body)
+    res.json({ ok: true })
+  }
+)
+router.put('/:id' , uploadProductImage.single("pd_img") , validate(validators.updateProductSchema) , product.updateProduct)
 router.delete('/' , product.deleteProduct)
+
+export default router 
