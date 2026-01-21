@@ -26,14 +26,14 @@ import authRoutes from './routes/auth.routes.js'
 import usersRoutes from './routes/users.rotes.js'
 import meRoutes from './routes/me.routes.js'
 import productRoutes from './routes/product.routes.js'
+import annoucementRoutes from './routes/announcement.route.js'
 
 // Use Routes
 
 app.use("/api/auth" , authRoutes)
-
 app.use("/api/users" , usersRoutes)
 app.use("/api/me" , meRoutes)
-
+app.use("/api/announcement" , annoucementRoutes)
 app.use("/api/product" , productRoutes)
 
 app.use((req , res , next) => {
