@@ -30,14 +30,12 @@ export const getAnnouncements = async (req, res, next) => {
 
     const allowedSortFields = [
       "annc_id",
-        "title",
-        "description",
-        "start_at",
-        "end_at",
-        "annc_img",
-        "is_active",
-        "created_at",
-        "updated_at",
+      "title",
+      "description",
+      "annc_img",
+      "is_active",
+      "created_at",
+      "updated_at",
     ];
 
     if (!allowedSortFields.includes(sortBy)) {
@@ -64,8 +62,6 @@ export const getAnnouncements = async (req, res, next) => {
         "annc_id",
         "title",
         "description",
-        "start_at",
-        "end_at",
         "annc_img",
         "is_active",
         "created_at",

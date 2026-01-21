@@ -155,8 +155,6 @@ export const createProduct = async (req, res, next) => {
       pd_category,
     } = req.validated;
 
-    console.log(req)
-
     const pd_img = req.file ? req.file.filename : null
 
     const avaliable = await db("product").where({ pd_name }).first();

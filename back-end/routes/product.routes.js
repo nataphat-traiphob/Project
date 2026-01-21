@@ -12,16 +12,7 @@ router.use(auth('admin'))
 
 router.get('/' , product.getProducts);
 router.get('/:id' , product.getProductById);
-// router.post('/' , uploadProductImage.single("pd_img") , requireImage , validate(validators.createProductSchema)  , product.createProduct)
-router.post(
-  '/',
-  uploadProductImage.single('pd_img'),
-  (req, res) => {
-    console.log('file:', req.file)
-    console.log('body:', req.body)
-    res.json({ ok: true })
-  }
-)
+router.post('/' , uploadProductImage.single("pd_img") , requireImage , validate(validators.createProductSchema)  , product.createProduct)
 router.put('/:id' , uploadProductImage.single("pd_img") , validate(validators.updateProductSchema) , product.updateProduct)
 router.delete('/' , product.deleteProduct)
 

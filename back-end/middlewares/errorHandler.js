@@ -1,8 +1,8 @@
 import multer from "multer";
 
 export default (err,req,res,next) => {
-    const status = err.status || 500;
-    const message = err.message || 'Internal Server Error';
+    let status = err.status || 500;
+    let message = err.message || 'Internal Server Error';
 
     // Multer Error
     if (err instanceof multer.MulterError){
