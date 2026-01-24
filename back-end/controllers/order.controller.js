@@ -1,19 +1,19 @@
 import db from "../db/knex.js";
 
 /**
- * GET /api/discount
- * 
- * ดึงข้อมูล Product discount ทั้งหมด
+ * GET /api/orders
+ *
+ * ดึงข้อมูล orders ทั้งหมด
  */
 
-export const getProductDiscounts = async (req, res, next) => {
+export const getOrders = async (req, res, next) => {
   try {
     let {
       page = 1,
       limit = 10,
       sortBy = "created_at",
       order = "desc",
-      search = ''
+      search = "",
     } = req.query;
 
     page = parseInt(page);
@@ -26,16 +26,13 @@ export const getProductDiscounts = async (req, res, next) => {
     const offset = (page - 1) * limit;
 
     const allowedSortFields = {
-      "dis_id" : "d.dis_id",
-      "dis_type" : "d.dis_type",
-      "dis_value" : "d.dis_value",
-      "pd_id" : "d.pd_id",
-      "pd_name" : "p.pd_name",
-      "start_at" : "d.start_at",
-      "end_at" : "d.end_at",
-      "is_active" : "d.is_active",
-      "created_at" : "d.created_at",
-      "updated_at" : "d.updated_at",
+      order_id: "o.order_id",
+      user_id: "u.user_id",
+      fname: "u.fname",
+      total_amount: "o.total_amount",
+      status: "o.status",
+      created_at: "o.created_at",
+      updated_at: "o.updated_at",
     };
 
     if (!allowedSortFields[sortBy]) {
@@ -44,37 +41,33 @@ export const getProductDiscounts = async (req, res, next) => {
 
     order = order === "asc" ? "asc" : "desc";
 
-    const baseQuery = db("product_discount as d")
-      .join("product as p" , "d.pd_id" , "p.pd_id")
-      .where({'d.is_active' : true})
+    const baseQuery = db("orders as o")
+      .join("users as u", "o.user_id", "u.user_id")
+      .whereIn("status", ["pending", "paid"])
       .modify((q) => {
-        if(search){
-            q.andWhere((builder) => {
-                builder
-                .where("p.pd_name","like",`%${search}%`)
-            })
+        if (search) {
+          q.andWhere((builder) => {
+            builder.where("u.fname", "like", `%${search}%`);
+          });
         }
-      })
+      });
 
     const data = await baseQuery
       .clone()
       .select(
-        "d.dis_id",
-        "d.dis_type",
-        "d.dis_value",
-        "d.pd_id",
-        "p.pd_name",
-        "d.start_at",
-        "d.end_at",
-        "d.is_active",
-        "d.created_at",
-        "d.updated_at",
+        "o.order_id",
+        "u.user_id",
+        "u.fname",
+        "o.total_amount",
+        "o.status",
+        "o.created_at",
+        "o.updated_at",
       )
       .orderBy(allowedSortFields[sortBy], order)
       .limit(limit)
-      .offset(offset)
+      .offset(offset);
 
-    const [{ total }] = await baseQuery.clone().count("d.dis_id as total");
+    const [{ total }] = await baseQuery.clone().count("o.order_id as total");
 
     return res.json({
       success: true,
@@ -92,40 +85,37 @@ export const getProductDiscounts = async (req, res, next) => {
 };
 
 /**
- * GET /api/discount/:id
+ * GET /api/orders/:id
  *
- * - ดึงข้อมูล product ตัวเดียวจาก id
+ * - ดึงข้อมูล order ตัวเดียวจาก id
  */
 
-export const getProductDiscountById = async (req, res, next) => {
+export const getOrderById = async (req, res, next) => {
   try {
     const id = req.params.id;
     if (!id)
       return res
         .status(400)
-        .json({ success: false, message: "Product discount ID is required" });
+        .json({ success: false, message: "Order ID is required" });
 
-    const row = await db("product_discount as d")
+    const row = await db("orders as o")
       .select(
-        "d.dis_id",
-        "d.dis_type",
-        "d.dis_value",
-        "d.pd_id",
-        "p.pd_name",
-        "d.start_at",
-        "d.end_at",
-        "d.is_active",
-        "d.created_at",
-        "d.updated_at",
+        "o.order_id",
+        "u.user_id",
+        "u.fname",
+        "o.total_amount",
+        "o.status",
+        "o.created_at",
+        "o.updated_at",
       )
-      .join("product as p" , "d.pd_id" , "p.pd_id")
-      .where({ 'd.dis_id': id , 'd.is_active' : true})
+      .join("users as u", "o.user_id", "u.user_id")
+      .where({ "o.order_id": id })
       .first();
 
     if (!row) {
       return res
         .status(404)
-        .json({ success: false, message: "Product discount not found" });
+        .json({ success: false, message: "Order not found" });
     }
 
     res.json({ success: true, data: row });
@@ -135,29 +125,47 @@ export const getProductDiscountById = async (req, res, next) => {
 };
 
 /**
- * POST /api/discount
+ * POST /api/orders
  *
- * - เพิ่มข้อมูล product discount
+ * - เพิ่มข้อมูล order
  */
 
-export const createProductDiscount = async (req, res, next) => {
+export const createOrder = async (req, res, next) => {
   try {
-    const {
-      pd_id,
-      dis_value,
-      start_at,
-      end_at,
-    } = req.validated;
+    const { user_id } = req.validated;
+
+    if (new Date(start_at) > new Date(end_at)) {
+      return res
+        .status(400)
+        .json({ success: false, message: "The time period is not correct" });
+    }
+
+    const overlap = await db("product_discount")
+      .where({ pd_id, is_active: true })
+      .andWhere(function () {
+        this.where("start_at", "<", end_at).andWhere("end_at", ">", start_at);
+      })
+      .first();
+
+    if (overlap) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Overlapping the time periods" });
+    }
 
     await db("product_discount").insert({
       pd_id,
+      dis_type,
       dis_value,
       start_at,
       end_at,
     });
     res
       .status(201)
-      .json({ success: true, message: "Product discount information added successfully" });
+      .json({
+        success: true,
+        message: "Product discount information added successfully",
+      });
   } catch (e) {
     next(e);
   }
@@ -179,11 +187,33 @@ export const updateProductDiscount = async (req, res, next) => {
         .status(400)
         .json({ success: false, message: "Product discount ID is required" });
 
-
     if (!Object.keys(updateData).length) {
       return res
         .status(400)
         .json({ success: false, message: "No data to update" });
+    }
+
+    if (new Date(updateData.start_at) > new Date(updateData.end_at)) {
+      return res
+        .status(400)
+        .json({ success: false, message: "The time period is not correct" });
+    }
+
+    const overlap = await db("product_discount")
+      .where({ pd_id, is_active: true })
+      .andWhere(function () {
+        this.where("start_at", "<", updateData.end_at).andWhere(
+          "end_at",
+          ">",
+          updateData.start_at,
+        );
+      })
+      .first();
+
+    if (overlap) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Overlapping the time periods" });
     }
 
     const updated = await db("product_discount")
@@ -220,15 +250,13 @@ export const deleteProductDiscount = async (req, res, next) => {
 
     const deleted = await db("product_discount")
       .where({ dis_id: id })
-      .update({is_active: false,});
+      .update({ is_active: false });
 
     if (!deleted) {
       return res
         .status(404)
         .json({ success: false, message: "Product discount not found" });
     }
-
-
 
     res.json({
       success: true,
