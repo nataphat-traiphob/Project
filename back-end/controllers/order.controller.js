@@ -1,4 +1,6 @@
 import db from "../db/knex.js";
+import { TransactionError } from "../errors/TransactionError.js";
+import { recalcOrderTotal } from "../services/order.service.js";
 
 /**
  * GET /api/orders
@@ -87,13 +89,14 @@ export const getOrders = async (req, res, next) => {
 /**
  * GET /api/orders/:id
  *
- * - ดึงข้อมูล order ตัวเดียวจาก id
+ * - ดึงข้อมูล order_items จาก id
  */
 
 export const getOrderById = async (req, res, next) => {
   try {
-    const id = req.params.id;
-    if (!id)
+    const order_id = req.params.id;
+    const {role , id} = req.user
+    if (!order_id)
       return res
         .status(400)
         .json({ success: false, message: "Order ID is required" });
@@ -109,8 +112,12 @@ export const getOrderById = async (req, res, next) => {
         "o.updated_at",
       )
       .join("users as u", "o.user_id", "u.user_id")
-      .where({ "o.order_id": id })
+      .where({ "o.order_id": order_id })
       .first();
+
+    if(row.user_id !== id && role !== 'admin'){
+      return res.status(403).json({success: false , message : 'Forbidden'})
+    }
 
     if (!row) {
       return res
@@ -127,142 +134,239 @@ export const getOrderById = async (req, res, next) => {
 /**
  * POST /api/orders
  *
- * - เพิ่มข้อมูล order
+ * - เพิ่มข้อมูล order และ order_items
  */
 
 export const createOrder = async (req, res, next) => {
+  const trx = await db.transaction();
+
   try {
-    const { user_id } = req.validated;
+    const {use_default_address , address , items} = req.validated;
+    const {id} = req.user.id
 
-    if (new Date(start_at) > new Date(end_at)) {
-      return res
-        .status(400)
-        .json({ success: false, message: "The time period is not correct" });
+    if(!items || !items.length){
+      throw new TransactionError("Order must have at least one item",400,"EMPTY_ORDER")
     }
 
-    const overlap = await db("product_discount")
-      .where({ pd_id, is_active: true })
-      .andWhere(function () {
-        this.where("start_at", "<", end_at).andWhere("end_at", ">", start_at);
-      })
-      .first();
+    let finalAddress
 
-    if (overlap) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Overlapping the time periods" });
+
+    if(use_default_address){
+      const user = await trx("users").select('address').where({user_id : id}).first()
+
+      if(!user || !user.address){
+        throw new TransactionError("User has no default address",400,"NO_DEFAULT_ADDRESS")
+      }
+
+      finalAddress = user.address
     }
 
-    await db("product_discount").insert({
-      pd_id,
-      dis_type,
-      dis_value,
-      start_at,
-      end_at,
+    else{
+      finalAddress = address
+    }
+
+    const orderItems = items.map(item => ({
+      ...item,
+      total: item.price * item.quantity
+    }))
+
+    const total_amount = orderItems.reduce((sum , item) => sum + item.total , 0)
+
+    const [order_id] = await trx("orders").insert({
+      user_id : id,
+      address : finalAddress,
+      total_amount,
     });
+
+    const orderItemsWithFK = orderItems.map(item => ({
+      order_id,
+      pd_id,
+      quantity : item.quantity,
+      price : item.price,
+      total:item.total
+    }))
+
+    await trx("order_items").insert(orderItemsWithFK)
+
+    await trx.commit()
+
     res
       .status(201)
       .json({
         success: true,
-        message: "Product discount information added successfully",
+        message: "Order created successfully",
       });
   } catch (e) {
+    await trx.rollback()
     next(e);
   }
 };
 
 /**
- * PUT /api/discount/:id
+ * PUT /api/order/:id
  *
- * - แก้ไขข้อมูล product discount จาก id
+ * - แก้ไขข้อมูล order และ order_items จาก id
  */
 
-export const updateProductDiscount = async (req, res, next) => {
+export const updateOrder = async (req, res, next) => {
+  const trx = await db.transaction()
   try {
-    const id = req.params.id;
+    const {role , id} = req.user
+    const order_id = req.params.id;
     const updateData = req.validated;
 
-    if (!id)
-      return res
-        .status(400)
-        .json({ success: false, message: "Product discount ID is required" });
+    if (!order_id)
+      throw new TransactionError("Order ID is required" , 400)
 
     if (!Object.keys(updateData).length) {
-      return res
-        .status(400)
-        .json({ success: false, message: "No data to update" });
+      throw new TransactionError("No data to update" , 400)
     }
 
-    if (new Date(updateData.start_at) > new Date(updateData.end_at)) {
-      return res
-        .status(400)
-        .json({ success: false, message: "The time period is not correct" });
+    const row = await trx("orders").select('user_id').where(order_id).first()
+
+    if(row.user_id !== id && role !== 'admin'){
+      throw new TransactionError('Forbidden' , 403)
     }
 
-    const overlap = await db("product_discount")
-      .where({ pd_id, is_active: true })
-      .andWhere(function () {
-        this.where("start_at", "<", updateData.end_at).andWhere(
-          "end_at",
-          ">",
-          updateData.start_at,
-        );
-      })
-      .first();
+    const updated = await trx("orders")
+      .where({ order_id, status: 'pending' })
+      .update(updateData.address);
 
-    if (overlap) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Overlapping the time periods" });
-    }
+    await trx("order_items").where({order_id}).delete()
 
-    const updated = await db("product_discount")
-      .where({ dis_id: id, is_active: true })
-      .update(updateData);
+    const orderItems = updateData.items.map(item => ({
+      ...item,
+      total: item.price * item.quantity
+    }))
+
+    const orderItemsWithFK = orderItems.map(item => ({
+      order_id,
+      pd_id,
+      quantity : item.quantity,
+      price : item.price,
+      total:item.total
+    }))
+
+    await trx("order_items").insert(orderItemsWithFK)
+
+    await recalcOrderTotal(trx , order_id)
 
     if (!updated) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Product discount not found" });
+      throw new TransactionError("Order not found" , 404)
     }
+
+    await trx.commit()
+
     res.json({
-      success: true,
-      message: "Product discount information updated successfully",
+      success: true, 
+      message: "Order updated successfully",
     });
   } catch (e) {
+    await trx.rollback()
     next(e);
   }
 };
 
 /**
- * DELETE /api/discount/:id
+ * DELETE /api/orders/:id
  *
- * - ลบข้อมูล product discount จาก id
+ * - ลบข้อมูล order(soft delete) และ order_items(hard delete) จาก id
  */
 
 export const deleteProductDiscount = async (req, res, next) => {
   try {
-    const id = req.params.id;
-    if (!id)
+    const order_id = req.params.id;
+    const id = req.user.id
+    if (!order_id)
       return res
         .status(400)
-        .json({ success: false, message: "Product discount ID is required" });
+        .json({ success: false, message: "Order ID is required" });
 
-    const deleted = await db("product_discount")
-      .where({ dis_id: id })
-      .update({ is_active: false });
+    const currentOrder = await db("orders").select("order_id,status").where(order_id).first()
 
-    if (!deleted) {
+    if(!currentOrder){
+      return res.status(404).json({success:false , message: 'Order ID is not valid'})
+    }
+
+    if(currentOrder.order_id !== id && role !== 'admin'){
+      return res.status(403).json({success : false , message:'Forbidden'})
+    }
+
+    if(currentOrder.status !== 'pending'){
+      return res.status(403).json({success:false , message:"This order cannot be cancelled at its current status"})
+    }
+
+    const deletedOrder = await db("order_id")
+      .where({ order_id , status : 'pending'})
+      .update({status: 'cancelled'});
+
+    const deleteItems = await db("order_items").where(order_id).delete()
+
+    if (!deletedOrder || !deleteItems) {
       return res
         .status(404)
-        .json({ success: false, message: "Product discount not found" });
+        .json({ success: false, message: "Order not found" });
     }
 
     res.json({
       success: true,
-      message: "Product discount information deleted successfully",
+      message: "Order deleted successfully",
     });
   } catch (e) {
     next(e);
   }
 };
+
+
+/**
+ * PUT /api/orders/status/:id
+ * 
+ * - แก้ไขสถานะของ orders 
+ *    pending -> paid -> shipped
+ */
+
+export const UpdateOrderStatus = async (req , res , next) => {
+  try {
+    const order_id = req.params.id
+    const {role , id} = req.user
+    const currentOrder = db("orders").select("user_id,status").where(order_id).first()
+
+    if(!currentOrder){
+      return res.status(404).json({success:false , message: 'Order ID is not valid'})
+    }
+
+    if(currentOrder.order_id !== id && role !== 'admin'){
+      return res.status(403).json({success : false , message:'Forbidden'})
+    }
+    let message 
+    let updateStatus
+
+    if(currentOrder.status === 'pending' && currentOrder.user_id === id){
+      updateStatus = 'paid'
+      message = 'Payment completed (mock)'
+    }
+    else if (currentOrder.status === 'paid' && role ==='admin'){
+      updateStatus = 'shipped'
+      message = 'Already shipped'
+    }
+    else{
+      return res.status(403).json({success:false , message:"This order cannot be cancelled at its current status"})
+    }
+
+    const update = await db("orders").where(order_id).update({status : updateStatus})
+
+    if(!update){
+      return res.status(404).json({success:false , message : 'Order not found'})
+    }
+
+    res.json({
+      success:true,
+      message
+    })
+
+    
+  }
+  catch(e){
+    next(e);
+  }
+}
