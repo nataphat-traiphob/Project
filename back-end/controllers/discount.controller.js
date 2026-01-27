@@ -151,7 +151,7 @@ export const createProductDiscount = async (req, res, next) => {
     }
 
     await db.transaction(async trx => {
-      await trx("product").where(pd_id).forUpdate()
+      await trx("product").where({pd_id}).forUpdate()
       
       const overlap = await trx("product_discount")
       .where({ pd_id, is_active: true })
@@ -217,7 +217,7 @@ export const updateProductDiscount = async (req, res, next) => {
     }
 
     await db.transaction(async trx => {
-      await trx("product").where(pd_id).forUpdate()
+      await trx("product").where({pd_id}).forUpdate()
       
       const overlap = await trx("product_discount")
       .where({ pd_id, is_active: true })
